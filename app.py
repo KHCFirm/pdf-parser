@@ -3,7 +3,7 @@ import fitz  # PyMuPDF
 import requests
 import io
 
-st.title("📄 HCFA-1500 PDF Parser (Extract All Text & Form Data)")
+st.title("📄 KHC PDF Parser")
 
 # Input: PDF URL
 pdf_url = st.text_input("Enter PDF URL:")
