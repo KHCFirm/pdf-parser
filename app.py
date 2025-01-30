@@ -1,39 +1,29 @@
 import streamlit as st
-import pdfplumber
 import requests
-import io
-import json
+import PyPDF2
+from io import BytesIO
 
-st.title("📄 KHC's PDF Parser API")
+st.title("PDF Parser")
 
-# Get PDF URL from Zapier
-pdf_url = st.query_params.get("url")
+# Extract text from PDF
+def extract_text_from_pdf(pdf_url):
+    try:
+        response = requests.get(pdf_url)
+        if response.status_code == 200:
+            pdf_file = BytesIO(response.content)
+            pdf_reader = PyPDF2.PdfReader(pdf_file)
+            text = "\n".join([page.extract_text() for page in pdf_reader.pages if page.extract_text()])
+            return text
+        else:
+            return f"Failed to fetch PDF: {response.status_code}"
+    except Exception as e:
+        return f"Error processing PDF: {str(e)}"
 
-def extract_pdf_text(pdf_url):
-    response = requests.get(pdf_url)
-    if response.status_code != 200:
-        return {"error": "Failed to fetch PDF"}
-
-    pdf_data = io.BytesIO(response.content)
-    
-    extracted_text = []
-    extracted_fields = []
-
-    with pdfplumber.open(pdf_data) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text()
-            if text:
-                extracted_text.append(text)
-
-            tables = page.extract_tables()
-            for table in tables:
-                extracted_fields.append(table)
-
-    return {
-        "text": "\n".join(extracted_text),
-        "fields": extracted_fields
-    }
-
-if pdf_url:
-    result = extract_pdf_text(pdf_url)
-    st.json(result)
+# Get the PDF URL from query parameters
+query_params = st.experimental_get_query_params()
+if "url" in query_params:
+    pdf_url = query_params["url"][0]
+    extracted_text = extract_text_from_pdf(pdf_url)
+    st.json({"text": extracted_text})  # Return JSON for Zapier
+else:
+    st.write("Provide a PDF URL as a query parameter: `?url=your_pdf_link`")
