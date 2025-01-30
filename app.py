@@ -3,7 +3,9 @@ import requests
 import PyPDF2
 from io import BytesIO
 
-st.title("PDF Parser")
+st.set_page_config(layout="wide")  # Ensures API mode works better
+
+st.title("PDF Parser API")
 
 # Extract text from PDF
 def extract_text_from_pdf(pdf_url):
@@ -19,12 +21,17 @@ def extract_text_from_pdf(pdf_url):
     except Exception as e:
         return f"Error processing PDF: {str(e)}"
 
-# Get the PDF URL from query parameters
-params = st.query_params  # ✅ No parentheses
+# Force API Mode
+st.write("🚀 This is an API, use `?url=your_pdf_link` to extract text.")
 
-if "url" in params:  # ✅ Correct variable name
+# Get the PDF URL from query parameters
+params = st.query_params  # ✅ No parentheses needed
+
+if "url" in params:
     pdf_url = params["url"][0]
     extracted_text = extract_text_from_pdf(pdf_url)
-    st.json({"text": extracted_text})  # Return JSON for Zapier
+
+    # 🔥 Return pure JSON for API use
+    st.json({"text": extracted_text})  
 else:
-    st.write("Provide a PDF URL as a query parameter: `?url=your_pdf_link`")
+    st.warning("❗ Provide a PDF URL as a query parameter: `?url=your_pdf_link`")
