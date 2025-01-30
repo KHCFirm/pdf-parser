@@ -1,5 +1,5 @@
 import streamlit as st
-import fitz  # PyMuPDF
+import pdfplumber
 import requests
 import io
 
@@ -15,27 +15,26 @@ if pdf_url:
         if response.status_code != 200:
             st.error("Failed to download PDF. Check the URL.")
         else:
-            # Read the PDF using PyMuPDF
+            # Read the PDF using pdfplumber
             pdf_data = io.BytesIO(response.content)
-            doc = fitz.open(stream=pdf_data, filetype="pdf")
+            with pdfplumber.open(pdf_data) as pdf:
+                extracted_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
 
-            # Extract static text
-            extracted_text = ""
-            for page in doc:
-                extracted_text += page.get_text("text") + "\n"
+                # Extract form field data (for HCFA-1500)
+                extracted_tables = []
+                for page in pdf.pages:
+                    tables = page.extract_tables()
+                    for table in tables:
+                        extracted_tables.append(table)
 
-            # Extract form fields
-            form_data = {}
-            for field in doc.widgets():
-                form_data[field.field_name] = field.text
-
-            # Display extracted data
+            # Display extracted text
             st.subheader("📝 Extracted Text (Static Content)")
             st.text_area("Extracted Text", extracted_text, height=300)
 
-            st.subheader("📋 Extracted Form Fields")
-            for key, value in form_data.items():
-                st.write(f"**{key}:** {value}")
+            # Display extracted form data
+            st.subheader("📋 Extracted Table Data (HCFA Fields)")
+            for table in extracted_tables:
+                st.write(table)
 
             # Allow Zapier to retrieve data
             st.write(f"✅ API Endpoint: `/parse?url={pdf_url}`")
