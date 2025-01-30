@@ -20,9 +20,10 @@ def extract_text_from_pdf(pdf_url):
         return f"Error processing PDF: {str(e)}"
 
 # Get the PDF URL from query parameters
-params = st.query_params()
-if "url" in query_params:
-    pdf_url = query_params["url"][0]
+params = st.query_params  # ✅ No parentheses
+
+if "url" in params:  # ✅ Correct variable name
+    pdf_url = params["url"][0]
     extracted_text = extract_text_from_pdf(pdf_url)
     st.json({"text": extracted_text})  # Return JSON for Zapier
 else:
