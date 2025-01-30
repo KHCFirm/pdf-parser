@@ -2,42 +2,38 @@ import streamlit as st
 import pdfplumber
 import requests
 import io
+import json
 
-st.title("📄 KHC PDF Parser")
+st.title("📄 HCFA-1500 PDF Parser API")
 
-# Input: PDF URL
-pdf_url = st.text_input("Enter PDF URL:")
+# Get PDF URL from Zapier
+pdf_url = st.query_params.get("url")
+
+def extract_pdf_text(pdf_url):
+    response = requests.get(pdf_url)
+    if response.status_code != 200:
+        return {"error": "Failed to fetch PDF"}
+
+    pdf_data = io.BytesIO(response.content)
+    
+    extracted_text = []
+    extracted_fields = []
+
+    with pdfplumber.open(pdf_data) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if text:
+                extracted_text.append(text)
+
+            tables = page.extract_tables()
+            for table in tables:
+                extracted_fields.append(table)
+
+    return {
+        "text": "\n".join(extracted_text),
+        "fields": extracted_fields
+    }
 
 if pdf_url:
-    try:
-        # Download the PDF
-        response = requests.get(pdf_url)
-        if response.status_code != 200:
-            st.error("Failed to download PDF. Check the URL.")
-        else:
-            # Read the PDF using pdfplumber
-            pdf_data = io.BytesIO(response.content)
-            with pdfplumber.open(pdf_data) as pdf:
-                extracted_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
-
-                # Extract form field data (for HCFA-1500)
-                extracted_tables = []
-                for page in pdf.pages:
-                    tables = page.extract_tables()
-                    for table in tables:
-                        extracted_tables.append(table)
-
-            # Display extracted text
-            st.subheader("📝 Extracted Text (Static Content)")
-            st.text_area("Extracted Text", extracted_text, height=300)
-
-            # Display extracted form data
-            st.subheader("📋 Extracted Table Data (HCFA Fields)")
-            for table in extracted_tables:
-                st.write(table)
-
-            # Allow Zapier to retrieve data
-            st.write(f"✅ API Endpoint: `/parse?url={pdf_url}`")
-
-    except Exception as e:
-        st.error(f"Error: {e}")
+    result = extract_pdf_text(pdf_url)
+    st.json(result)
