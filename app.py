@@ -4,7 +4,7 @@ import requests
 import io
 import json
 
-st.title("📄 HCFA-1500 PDF Parser API")
+st.title("📄 KHC's PDF Parser API")
 
 # Get PDF URL from Zapier
 pdf_url = st.query_params.get("url")
