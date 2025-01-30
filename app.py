@@ -1,27 +1,44 @@
 import streamlit as st
-import PyPDF2
+import fitz  # PyMuPDF
 import requests
 import io
 
-st.title("📄 PDF Parser")
+st.title("📄 HCFA-1500 PDF Parser (Extract All Text & Form Data)")
 
 # Input: PDF URL
 pdf_url = st.text_input("Enter PDF URL:")
 
 if pdf_url:
     try:
-        # Download the PDF file
+        # Download the PDF
         response = requests.get(pdf_url)
         if response.status_code != 200:
             st.error("Failed to download PDF. Check the URL.")
         else:
-            # Read PDF content
-            pdf_reader = PyPDF2.PdfReader(io.BytesIO(response.content))
-            extracted_text = "\n".join([page.extract_text() for page in pdf_reader.pages if page.extract_text()])
+            # Read the PDF using PyMuPDF
+            pdf_data = io.BytesIO(response.content)
+            doc = fitz.open(stream=pdf_data, filetype="pdf")
 
-            st.text_area("Extracted Text:", extracted_text, height=400)
-            
-            # Allow Zapier or others to retrieve text via URL
+            # Extract static text
+            extracted_text = ""
+            for page in doc:
+                extracted_text += page.get_text("text") + "\n"
+
+            # Extract form fields
+            form_data = {}
+            for field in doc.widgets():
+                form_data[field.field_name] = field.text
+
+            # Display extracted data
+            st.subheader("📝 Extracted Text (Static Content)")
+            st.text_area("Extracted Text", extracted_text, height=300)
+
+            st.subheader("📋 Extracted Form Fields")
+            for key, value in form_data.items():
+                st.write(f"**{key}:** {value}")
+
+            # Allow Zapier to retrieve data
             st.write(f"✅ API Endpoint: `/parse?url={pdf_url}`")
+
     except Exception as e:
         st.error(f"Error: {e}")
