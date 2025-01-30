@@ -20,7 +20,7 @@ def extract_text_from_pdf(pdf_url):
         return f"Error processing PDF: {str(e)}"
 
 # Get the PDF URL from query parameters
-query_params = st.query_params()
+params = st.query_params()
 if "url" in query_params:
     pdf_url = query_params["url"][0]
     extracted_text = extract_text_from_pdf(pdf_url)
