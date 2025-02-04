@@ -3,51 +3,51 @@ import requests
 import pytesseract
 from pdf2image import convert_from_bytes
 from io import BytesIO
-import PyPDF2
 import re
 
 app = Flask(__name__)
 
-# ✅ Headers to mimic a browser request
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Referer": "https://www.google.com/",
-    "Accept": "*/*",
-    "Connection": "keep-alive"
-}
-
-# ✅ Extract text from PDF using PyPDF2 first, then OCR if needed
+# Extract text from PDF using high-quality OCR
 def extract_text_from_pdf(pdf_url):
     try:
         if not pdf_url.startswith("http"):
             return {"error": "Invalid URL. Must start with 'http://' or 'https://'."}
 
-        response = requests.get(pdf_url, headers=HEADERS, allow_redirects=True)
-        
-        # ✅ Check if request was successful
-        if response.status_code != 200:
+        # ✅ Add headers to mimic a browser request
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+            "Accept": "application/pdf",
+            "Connection": "keep-alive",
+            "Referer": "https://www.google.com/"  # Some S3 buckets require a referrer
+        }
+
+        response = requests.get(pdf_url, headers=headers)
+
+        if response.status_code == 200:
+            pdf_bytes = BytesIO(response.content)
+
+            # Convert PDF to images for OCR
+            images = convert_from_bytes(pdf_bytes.read())
+
+            extracted_text = []
+            for img in images:
+                text = pytesseract.image_to_string(img, config="--psm 6")  # PSM 6 optimized for forms
+                extracted_text.append(text)
+
+            full_text = "\n".join(extracted_text)
+
+            # Process text into structured HCFA 1500 format
+            structured_data = parse_hcfa_1500(full_text)
+
+            return structured_data
+
+        else:
             return {"error": f"Failed to fetch PDF: HTTP {response.status_code}"}
-
-        pdf_file = BytesIO(response.content)
-
-        # ✅ Try extracting text with PyPDF2 first
-        pdf_reader = PyPDF2.PdfReader(pdf_file)
-        extracted_text = "\n".join([page.extract_text() for page in pdf_reader.pages if page.extract_text()])
-
-        # ✅ If PyPDF2 extracted text, return it (skip OCR)
-        if extracted_text.strip():
-            return parse_hcfa_1500(extracted_text)
-
-        # ✅ If PyPDF2 failed, use OCR
-        images = convert_from_bytes(pdf_file.read())
-        extracted_text = [pytesseract.image_to_string(img, config="--psm 6") for img in images]
-
-        return parse_hcfa_1500("\n".join(extracted_text))
 
     except Exception as e:
         return {"error": str(e)}
 
-# ✅ Parse OCR text into key-value pairs for HCFA 1500 form
+# Parse OCR text into key-value pairs for HCFA 1500 form
 def parse_hcfa_1500(ocr_text):
     fields = {
         "Claim Receiver Type": r"(?<=Claim Receiver Type)[\s:]+([\w\s]+)",
