@@ -4,4 +4,3 @@ pytesseract
 pdf2image
 pillow
 gunicorn
-poppler-utils
