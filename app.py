@@ -107,6 +107,10 @@ def parse_pdf():
 
     extracted_data = extract_text_from_pdf(pdf_url.strip())
     return jsonify(extracted_data)
+    
+@app.route("/healthz", methods=["GET"])
+def health_check():
+    return jsonify({"status": "ok"}), 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
