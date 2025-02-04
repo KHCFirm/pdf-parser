@@ -7,6 +7,8 @@ RUN apt-get update && apt-get install -y \
     tesseract-ocr-eng \
     libtesseract-dev \
     poppler-utils \
+    tesseract --version && \
+    ls -l /usr/share/tesseract-ocr/4.00/tessdata/
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
