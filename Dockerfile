@@ -4,6 +4,7 @@ FROM python:3.9-slim
 # Install required dependencies
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
+    tesseract-ocr-eng \
     libtesseract-dev \
     poppler-utils \
     && rm -rf /var/lib/apt/lists/*
