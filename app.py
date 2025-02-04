@@ -8,7 +8,6 @@ import os
 import subprocess
 
 # Set Tesseract path explicitly
-os.environ["TESSDATA_PREFIX"] = "/usr/share/tesseract-ocr/4.00/tessdata/"
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 # Debugging: Check if Tesseract is installed
