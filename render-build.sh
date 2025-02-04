@@ -1,10 +1,24 @@
-#!/bin/bash
+# Use an official Python image with Debian-based OS
+FROM python:3.9-slim
 
-# Update package lists
-apt-get update
+# Install dependencies
+RUN apt-get update && apt-get install -y tesseract-ocr libtesseract-dev
 
-# Install Tesseract OCR and dependencies
-apt-get install -y tesseract-ocr libtesseract-dev libleptonica-dev
+# Set the working directory
+WORKDIR /app
+
+# Copy application files
+COPY . .
 
 # Install Python dependencies
-pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Explicitly set Tesseract path
+ENV TESSDATA_PREFIX="/usr/share/tesseract-ocr/4.00/tessdata/"
+ENV TESSERACT_CMD="/usr/bin/tesseract"
+
+# Expose the app port
+EXPOSE 5000
+
+# Start the Flask app with Gunicorn
+CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:5000", "app:app"]
