@@ -4,23 +4,15 @@ import pytesseract
 from pdf2image import convert_from_bytes
 from io import BytesIO
 import re
-import os
-import subprocess
 
 app = Flask(__name__)
 
-# ✅ Ensure Tesseract is properly configured
-TESSDATA_PREFIX = "/usr/share/tesseract-ocr/4.00/tessdata/"
-os.environ["TESSDATA_PREFIX"] = TESSDATA_PREFIX
-os.environ["TESSERACT_CMD"] = "/usr/bin/tesseract"
-
-# ✅ Extract text from PDF using optimized OCR
+# ✅ Function to extract text from PDF using Tesseract OCR
 def extract_text_from_pdf(pdf_url):
     try:
         if not pdf_url.startswith("http"):
             return {"error": "Invalid URL. Must start with 'http://' or 'https://'."}
 
-        # ✅ Add headers to mimic a browser request (for S3 access)
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
             "Accept": "application/pdf",
@@ -29,61 +21,42 @@ def extract_text_from_pdf(pdf_url):
         }
 
         response = requests.get(pdf_url, headers=headers)
-
-        if response.status_code == 200:
-            pdf_bytes = BytesIO(response.content)
-
-            # ✅ Convert PDF to images with optimized DPI to save memory
-            images = convert_from_bytes(pdf_bytes.read(), dpi=100)  # Lower DPI saves memory
-
-            extracted_text = []
-            for img in images:
-                try:
-                    # ✅ Run OCR with timeout to prevent crashes
-                    text = pytesseract.image_to_string(img, lang="eng", config="--psm 6", timeout=20)  
-                    extracted_text.append(text)
-                except subprocess.TimeoutExpired:
-                    return {"error": "OCR process timed out. Try reducing image quality."}
-
-            full_text = "\n".join(extracted_text)
-
-            # ✅ Process text into structured HCFA 1500 format
-            structured_data = parse_hcfa_1500(full_text)
-
-            return structured_data
-
-        else:
+        if response.status_code != 200:
             return {"error": f"Failed to fetch PDF: HTTP {response.status_code}"}
+
+        pdf_bytes = BytesIO(response.content)
+        images = convert_from_bytes(pdf_bytes.read())
+
+        extracted_text = []
+        for img in images:
+            text = pytesseract.image_to_string(img, lang="eng", config="--psm 6")
+            extracted_text.append(text)
+
+        full_text = "\n".join(extracted_text)
+
+        # ✅ Process extracted text into structured HCFA 1500 format
+        structured_data = parse_hcfa_1500(full_text)
+        return structured_data
 
     except Exception as e:
         return {"error": str(e)}
 
-# ✅ Parse OCR text into key-value pairs for HCFA 1500 form
+# ✅ Function to parse HCFA 1500 fields
 def parse_hcfa_1500(ocr_text):
     fields = {
-        "Claim Receiver Type": r"(?<=Claim Receiver Type)[\s:]+([\w\s]+)",
-        "Insured's ID #": r"(?<=Insured's ID #)[\s:]+([\w\d]+)",
-        "Patient's Name": r"(?<=Patient's Name)[\s:]+([\w\s,]+)",
-        "Patient's DOB": r"(?<=Patients DOB)[\s:]+([\d/]+)",
-        "Patient's SEX": r"(?<=Patients SEX)[\s:]+([MF])",
-        "Insured's Name": r"(?<=Insured's Name)[\s:]+([\w\s,]+)",
-        "Patient's Address": r"(?<=Patient's Address)[\s:]+([\w\s,]+)",
-        "Relationship to Insured": r"(?<=Relationship to Insured)[\s:]+([\w]+)",
-        "Group Number": r"(?<=Group Number)[\s:]+([\d]+)",
-        "Payment Authorization Signature": r"(?<=Payment Authorization Signature)[\s:]+([\w\s]+)",
-        "Diagnosis": r"(?<=Diagnosis)[\s:]+([\w\d\.]+)",
-        "Date of Service": r"(?<=DOS)[\s:]+([\d/]+)",
-        "Place of Service": r"(?<=Place of Service)[\s:]+([\d]+)",
-        "Procedure Code": r"(?<=Procedure Code/CPT code)[\s:]+([\w\d]+)",
-        "Procedure Code Modifier": r"(?<=Procedure Code Modifier)[\s:]+([\w]+)",
-        "Diagnosis Pointer": r"(?<=Diagnosis pointer)[\s:]+([\d]+)",
-        "Charges": r"(?<=Charges)[\s:]+\$(\d+.\d+)",
-        "Rendering Provider ID": r"(?<=Rendering Provider ID)[\s:]+([\d]+)",
-        "Days/Units": r"(?<=Days/Units)[\s:]+([\d]+)",
-        "Federal TIN": r"(?<=Federal TIN SSN or EIN indicator)[\s:]+([\d]+)",
-        "Clinical Signature Date": r"(?<=Clinical Signature Date)[\s:]+([\w\s,]+)",
-        "Billed By": r"(?<=Billed By)[\s:]+([\w\s,]+)",
-        "Billing Provider NPI": r"(?<=NPI)[\s:]+([\d]+)"
+        "Insured's ID #": r"Insured's ID Number:\s*([\w\d-]+)",
+        "Patient's Name": r"Patient's Name:\s*([\w\s,]+)",
+        "Patient's DOB": r"Patient's DOB:\s*(\d{2}/\d{2}/\d{4})",
+        "Patient's SEX": r"Patient's SEX:\s*([MF])",
+        "Insured's Name": r"Insured's Name:\s*([\w\s,]+)",
+        "Patient's Address": r"Patient's Address:\s*([\w\s,]+)",
+        "Relationship to Insured": r"Relationship to Insured:\s*(\w+)",
+        "Diagnosis": r"Diagnosis:\s*([\w\d\.]+)",
+        "Date of Service": r"DOS:\s*(\d{2}/\d{2}/\d{4})",
+        "Procedure Code": r"Procedure Code:\s*([\w\d]+)",
+        "Charges": r"Charges:\s*\$?([\d\.]+)",
+        "Rendering Provider ID": r"Rendering Provider ID:\s*([\d]+)",
+        "Billing Provider NPI": r"NPI:\s*([\d]+)"
     }
 
     structured_output = {}
@@ -93,10 +66,12 @@ def parse_hcfa_1500(ocr_text):
 
     return structured_output
 
+# ✅ Home route for API status check
 @app.route("/", methods=["GET"])
 def home():
-    return jsonify({"message": "🚀 HCFA 1500 PDF Parser API. Use /parse?url=your_pdf_link to extract structured data."})
+    return jsonify({"message": "🚀 HCFA 1500 PDF OCR API is running. Use /parse?url=your_pdf_link to extract structured data."})
 
+# ✅ API route to parse PDFs
 @app.route("/parse", methods=["GET"])
 def parse_pdf():
     pdf_url = request.args.get("url")
@@ -106,5 +81,6 @@ def parse_pdf():
     extracted_data = extract_text_from_pdf(pdf_url.strip())
     return jsonify(extracted_data)
 
+# ✅ Run Flask app on Cloud Run's expected port (8080)
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=8080)
