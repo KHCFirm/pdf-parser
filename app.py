@@ -5,10 +5,19 @@ from pdf2image import convert_from_bytes
 from io import BytesIO
 import re
 import os
+import subprocess
 
 # Set Tesseract path explicitly
 os.environ["TESSDATA_PREFIX"] = "/usr/share/tesseract-ocr/4.00/tessdata/"
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+
+# Debugging: Check if Tesseract is installed
+try:
+    tesseract_version = subprocess.run(["tesseract", "--version"], capture_output=True, text=True)
+    print("✅ Tesseract Installed:", tesseract_version.stdout)
+except FileNotFoundError:
+    print("❌ Tesseract is NOT installed!")
+
 
 app = Flask(__name__)
 
