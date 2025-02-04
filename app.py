@@ -4,6 +4,11 @@ import pytesseract
 from pdf2image import convert_from_bytes
 from io import BytesIO
 import re
+import os
+
+# Set Tesseract path explicitly
+os.environ["TESSDATA_PREFIX"] = "/usr/share/tesseract-ocr/4.00/tessdata/"
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 app = Flask(__name__)
 
