@@ -1,7 +1,7 @@
 # Use Python slim image
 FROM python:3.9-slim
 
-# Install system dependencies including Tesseract
+# Install system dependencies (including Tesseract OCR)
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     libtesseract-dev \
@@ -9,13 +9,15 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# ✅ Manually Download Tesseract Trained Data (`eng.traineddata`)
-RUN mkdir -p /usr/share/tesseract-ocr/4.00/tessdata/ && \
-    wget -O /usr/share/tesseract-ocr/4.00/tessdata/eng.traineddata \
+# ✅ Create the correct Tesseract directory manually
+RUN mkdir -p /usr/share/tessdata/
+
+# ✅ Download the traineddata file into the correct directory
+RUN wget -O /usr/share/tessdata/eng.traineddata \
     https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata
 
-# ✅ Ensure correct environment variables
-ENV TESSDATA_PREFIX="/usr/share/tesseract-ocr/4.00/tessdata/"
+# ✅ Set environment variables so Tesseract finds the traineddata file
+ENV TESSDATA_PREFIX="/usr/share/tessdata/"
 ENV TESSERACT_CMD="/usr/bin/tesseract"
 
 # Set working directory
@@ -27,11 +29,11 @@ COPY . .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ✅ Test if Tesseract is installed correctly
-RUN tesseract --version && ls -lah $TESSDATA_PREFIX
+# ✅ Verify traineddata file exists before running the app
+RUN test -f /usr/share/tessdata/eng.traineddata || echo "TESSERACT DATA MISSING"
 
-# ✅ Verify traineddata file exists
-RUN test -f /usr/share/tesseract-ocr/4.00/tessdata/eng.traineddata || echo "TESSERACT DATA MISSING"
+# ✅ Print Tesseract version for debugging
+RUN tesseract --version && ls -lah $TESSDATA_PREFIX
 
 # Expose the port for Google Cloud Run
 EXPOSE 8080
