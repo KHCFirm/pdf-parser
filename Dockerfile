@@ -25,4 +25,4 @@ ENV TESSERACT_CMD="/usr/bin/tesseract"
 EXPOSE 5000
 
 # Start the Flask app with Gunicorn
-CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:5000", "app:app"]
+CMD ["python", "app.py"]
