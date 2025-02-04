@@ -1,6 +1,6 @@
 flask
 requests
-pytesseract
+google-cloud-vision
 pdf2image
 pillow
 gunicorn
