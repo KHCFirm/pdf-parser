@@ -4,23 +4,10 @@ import pytesseract
 from pdf2image import convert_from_bytes
 from io import BytesIO
 import re
-import os
-import subprocess
-
-# Set Tesseract path explicitly
-pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
-
-# Debugging: Check if Tesseract is installed
-try:
-    tesseract_version = subprocess.run(["tesseract", "--version"], capture_output=True, text=True)
-    print("✅ Tesseract Installed:", tesseract_version.stdout)
-except FileNotFoundError:
-    print("❌ Tesseract is NOT installed!")
-
 
 app = Flask(__name__)
 
-# Extract text from PDF using high-quality OCR
+# ✅ Extract text from PDF using optimized Tesseract settings
 def extract_text_from_pdf(pdf_url):
     try:
         if not pdf_url.startswith("http"):
@@ -31,60 +18,51 @@ def extract_text_from_pdf(pdf_url):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
             "Accept": "application/pdf",
             "Connection": "keep-alive",
-            "Referer": "https://www.google.com/"  # Some S3 buckets require a referrer
+            "Referer": "https://www.google.com/"
         }
 
-        response = requests.get(pdf_url, headers=headers)
-
-        if response.status_code == 200:
-            pdf_bytes = BytesIO(response.content)
-
-            # Convert PDF to images for OCR
-            images = convert_from_bytes(pdf_bytes.read())
-
-            extracted_text = []
-            for img in images:
-                text = pytesseract.image_to_string(img, config="--psm 6")  # PSM 6 optimized for forms
-                extracted_text.append(text)
-
-            full_text = "\n".join(extracted_text)
-
-            # Process text into structured HCFA 1500 format
-            structured_data = parse_hcfa_1500(full_text)
-
-            return structured_data
-
-        else:
+        response = requests.get(pdf_url, headers=headers, timeout=15)  # ✅ Set a timeout
+        if response.status_code != 200:
             return {"error": f"Failed to fetch PDF: HTTP {response.status_code}"}
 
+        pdf_bytes = BytesIO(response.content)
+
+        # ✅ Convert PDF to images with lower DPI (faster processing)
+        images = convert_from_bytes(pdf_bytes.read(), dpi=150)
+
+        extracted_text = []
+        for img in images:
+            text = pytesseract.image_to_string(img, lang="eng", config="--psm 3")  # ✅ Faster OCR
+            extracted_text.append(text)
+
+        full_text = "\n".join(extracted_text)
+
+        # ✅ Process text into structured HCFA 1500 format
+        structured_data = parse_hcfa_1500(full_text)
+
+        return structured_data
+
+    except requests.Timeout:
+        return {"error": "Request to fetch the PDF timed out. Try a smaller file."}
     except Exception as e:
         return {"error": str(e)}
 
-# Parse OCR text into key-value pairs for HCFA 1500 form
+# ✅ Parse OCR text into key-value pairs for HCFA 1500 form
 def parse_hcfa_1500(ocr_text):
     fields = {
-        "Claim Receiver Type": r"(?<=Claim Receiver Type)[\s:]+([\w\s]+)",
-        "Insured's ID #": r"(?<=Insured's ID #)[\s:]+([\w\d]+)",
         "Patient's Name": r"(?<=Patient's Name)[\s:]+([\w\s,]+)",
+        "Insured's ID #": r"(?<=Insured's ID #)[\s:]+([\w\d]+)",
         "Patient's DOB": r"(?<=Patients DOB)[\s:]+([\d/]+)",
         "Patient's SEX": r"(?<=Patients SEX)[\s:]+([MF])",
-        "Insured's Name": r"(?<=Insured's Name)[\s:]+([\w\s,]+)",
-        "Patient's Address": r"(?<=Patient's Address)[\s:]+([\w\s,]+)",
-        "Relationship to Insured": r"(?<=Relationship to Insured)[\s:]+([\w]+)",
         "Group Number": r"(?<=Group Number)[\s:]+([\d]+)",
-        "Payment Authorization Signature": r"(?<=Payment Authorization Signature)[\s:]+([\w\s]+)",
         "Diagnosis": r"(?<=Diagnosis)[\s:]+([\w\d\.]+)",
         "Date of Service": r"(?<=DOS)[\s:]+([\d/]+)",
         "Place of Service": r"(?<=Place of Service)[\s:]+([\d]+)",
         "Procedure Code": r"(?<=Procedure Code/CPT code)[\s:]+([\w\d]+)",
         "Procedure Code Modifier": r"(?<=Procedure Code Modifier)[\s:]+([\w]+)",
-        "Diagnosis Pointer": r"(?<=Diagnosis pointer)[\s:]+([\d]+)",
-        "Charges": r"(?<=Charges)[\s:]+\$(\d+.\d+)",
         "Rendering Provider ID": r"(?<=Rendering Provider ID)[\s:]+([\d]+)",
         "Days/Units": r"(?<=Days/Units)[\s:]+([\d]+)",
         "Federal TIN": r"(?<=Federal TIN SSN or EIN indicator)[\s:]+([\d]+)",
-        "Clinical Signature Date": r"(?<=Clinical Signature Date)[\s:]+([\w\s,]+)",
-        "Billed By": r"(?<=Billed By)[\s:]+([\w\s,]+)",
         "Billing Provider NPI": r"(?<=NPI)[\s:]+([\d]+)"
     }
 
@@ -107,10 +85,6 @@ def parse_pdf():
 
     extracted_data = extract_text_from_pdf(pdf_url.strip())
     return jsonify(extracted_data)
-    
-@app.route("/healthz", methods=["GET"])
-def health_check():
-    return jsonify({"status": "ok"}), 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
