@@ -23,7 +23,7 @@ steps:
       - "--region=us-central1"
       - "--platform=managed"
       - "--allow-unauthenticated"
-      - "--port=5000"
+      - "--port=8080"
 
 # Store logs only in Cloud Logging
 options:
