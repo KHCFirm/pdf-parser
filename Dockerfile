@@ -1,7 +1,7 @@
-# Use Python 3.9 slim (small image)
-FROM python:3.9-slim
+# Use an official Python base image
+FROM python:3.9
 
-# Install dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     libtesseract-dev \
@@ -17,12 +17,11 @@ COPY . .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Set Tesseract environment variables
-ENV TESSDATA_PREFIX="/usr/share/tesseract-ocr/4.00/tessdata/"
-ENV TESSERACT_CMD="/usr/bin/tesseract"
+# Expose the port Flask runs on
+EXPOSE 8080
 
-# Expose port
-EXPOSE 5000
+# Set environment variable for Google Cloud Run
+ENV PORT=8080
 
-# Start the app
-CMD ["gunicorn", "-w", "2", "-t", "300", "-b", "0.0.0.0:5000", "app:app"]
+# Start the Flask app with Gunicorn
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "app:app"]
