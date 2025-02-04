@@ -1,4 +1,7 @@
 Flask
 requests
+pytesseract
+pdf2image
 PyPDF2
+pillow
 gunicorn
