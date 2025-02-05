@@ -4,5 +4,3 @@ google-cloud-vision
 pillow
 pdf2image
 gunicorn
-transformers
-torch
