@@ -50,52 +50,56 @@ def extract_text_from_pdf(pdf_url):
         full_text = "\n".join(extracted_text)
 
         # Log raw OCR output for debugging
-        print("🔍 Extracted OCR Text:\n", full_text[:20000])  # Limit to 2000 chars for preview
+        print("🔍 Raw OCR Text:\n", full_text[:2000])  # Limit to 2000 chars for preview
 
-        # Parse text into structured HCFA 1500 fields
-        structured_data = parse_hcfa_1500(full_text)
+        # Normalize and parse text into structured HCFA 1500 fields
+        normalized_text = normalize_text(full_text)
+        print("🔍 Normalized OCR Text:\n", normalized_text[:2000])  # For debugging
+        structured_data = parse_hcfa_1500(normalized_text)
 
         return structured_data
 
     except Exception as e:
         return {"error": str(e)}
 
+# Function to normalize OCR text for improved matching
+def normalize_text(ocr_text):
+    normalized = ocr_text.upper()  # Convert to uppercase for case-insensitive matching
+    normalized = re.sub(r"\s+", " ", normalized)  # Replace multiple spaces with a single space
+    normalized = re.sub(r"[\.,]", "", normalized)  # Remove dots and commas for cleaner matching
+    return normalized.strip()
+
 # Function to parse text into HCFA 1500 structured data
 def parse_hcfa_1500(ocr_text):
-    """ Extracts relevant fields using regex patterns """
-
-    # Normalize text to improve regex matching
-    normalized_text = ocr_text.replace("\n", " ").strip()
-
     fields = {
-        "Claim Receiver Type": r"Claim Receiver Type[:\s]+([\w\s]+)",
-        "Insured's ID #": r"INSURED['’]?S ID\.? NUMBER[:\s]+([\w\d]+)",
-        "Patient's Name": r"PATIENT['’]?S NAME[:\s]+([\w\s,]+)",
-        "Patient's DOB": r"PATIENT['’]?S BIRTH DATE[:\s]+(\d{2} \d{2} \d{4})",
-        "Patient's SEX": r"PATIENT['’]?S SEX[:\s]+([MF])",
+        "Billed By": r"BILLED BY[:\s]+([\w\s]+)",
+        "Billing Provider NPI": r"BILLING PROVIDER NPI[:\s]+([\d]+)",
+        "Charges": r"CHARGES[:\s]+\$?([\d.]+)",
+        "Claim Receiver Type": r"CLAIM RECEIVER TYPE[:\s]+([\w\s]+)",
+        "Clinical Signature Date": r"CLINICAL SIGNATURE DATE[:\s]+([\d/]+)",
+        "Date of Service": r"DATE OF SERVICE[:\s]+([\d/]+)",
+        "Days Units": r"DAYS/UNITS[:\s]+([\d]+)",
+        "Diagnosis": r"DIAGNOSIS[:\s]+([\w\d.]+)",
+        "Diagnosis Pointer": r"DIAGNOSIS POINTER[:\s]+([\d]+)",
+        "Federal TIN": r"FEDERAL TIN[:\s]+([\d]+)",
+        "Group Number": r"GROUP NUMBER[:\s]+([\w\d]+)",
+        "Insured's ID": r"INSURED['’]?S ID[:\s]+([\w\d]+)",
         "Insured's Name": r"INSURED['’]?S NAME[:\s]+([\w\s,]+)",
         "Patient's Address": r"PATIENT['’]?S ADDRESS[:\s]+([\w\s,]+)",
-        "Relationship to Insured": r"RELATIONSHIP TO INSURED[:\s]+([\w]+)",
-        "Group Number": r"GROUP NUMBER[:\s]+([\d]+)",
+        "Patient's DOB": r"PATIENT['’]?S DOB[:\s]+(\d{2} \d{2} \d{4})",
+        "Patient's Name": r"PATIENT['’]?S NAME[:\s]+([\w\s,]+)",
+        "Patient's SEX": r"PATIENT['’]?S SEX[:\s]+([MF])",
         "Payment Authorization Signature": r"PATIENT['’]?S OR AUTHORIZED PERSON['’]?S SIGNATURE[:\s]+([\w\s]+)",
-        "Diagnosis": r"DIAGNOSIS[:\s]+([\w\d\.]+)",
-        "Date of Service": r"DATE OF SERVICE[:\s]+([\d/]+)",
         "Place of Service": r"PLACE OF SERVICE[:\s]+([\d]+)",
         "Procedure Code": r"PROCEDURE CODE[:\s]+([\w\d]+)",
         "Procedure Code Modifier": r"MODIFIER[:\s]+([\w]+)",
-        "Diagnosis Pointer": r"DIAGNOSIS POINTER[:\s]+([\d]+)",
-        "Charges": r"CHARGES[:\s]+\$?([\d.]+)",
-        "Rendering Provider ID": r"RENDERING PROVIDER ID[:\s]+([\d]+)",
-        "Days/Units": r"DAYS/UNITS[:\s]+([\d]+)",
-        "Federal TIN": r"FEDERAL TIN[:\s]+([\d]+)",
-        "Clinical Signature Date": r"CLINICIAN['’]?S SIGNATURE DATE[:\s]+([\w\s,]+)",
-        "Billed By": r"BILLED BY[:\s]+([\w\s,]+)",
-        "Billing Provider NPI": r"BILLING PROVIDER NPI[:\s]+([\d]+)"
+        "Relationship to Insured": r"RELATIONSHIP TO INSURED[:\s]+([\w]+)",
+        "Rendering Provider ID": r"RENDERING PROVIDER ID[:\s]+([\d]+)"
     }
 
     structured_output = {}
     for field, regex in fields.items():
-        match = re.search(regex, normalized_text, re.IGNORECASE)
+        match = re.search(regex, ocr_text, re.IGNORECASE)
         structured_output[field] = match.group(1).strip() if match else "Not Found"
 
     return structured_output
