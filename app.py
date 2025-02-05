@@ -1,21 +1,17 @@
 from flask import Flask, request, jsonify
 import requests
-import re
 import os
-from google.cloud import vision
 from pdf2image import convert_from_bytes
 from io import BytesIO
+import base64
 
 app = Flask(__name__)
 
-# Initialize Google Cloud Vision OCR client
-client = vision.ImageAnnotatorClient()
-
 # Get Gemini API Key from environment variable
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro-vision:generateContent?key={GEMINI_API_KEY}"
 
-# Function to extract text from a PDF using Google Cloud OCR
+# Function to extract text from a PDF using Gemini's vision model
 def extract_text_from_pdf(pdf_url):
     try:
         if not pdf_url.startswith("http"):
@@ -38,19 +34,14 @@ def extract_text_from_pdf(pdf_url):
 
         extracted_text = []
         for img in images:
-            image_content = BytesIO()
-            img.save(image_content, format="JPEG")
-            image_content = image_content.getvalue()
+            # Convert image to Base64
+            image_buffer = BytesIO()
+            img.save(image_buffer, format="JPEG")
+            image_base64 = base64.b64encode(image_buffer.getvalue()).decode("utf-8")
 
-            # Google OCR request
-            image = vision.Image(content=image_content)
-            response = client.text_detection(image=image)
-
-            if response.error.message:
-                return {"error": f"OCR error: {response.error.message}"}
-
-            text = response.full_text_annotation.text
-            extracted_text.append(text)
+            # Send image to Gemini for OCR
+            ocr_text = send_image_to_gemini(image_base64)
+            extracted_text.append(ocr_text)
 
         full_text = "\n".join(extracted_text)
 
@@ -64,6 +55,35 @@ def extract_text_from_pdf(pdf_url):
 
     except Exception as e:
         return {"error": str(e)}
+
+# Function to send image to Gemini for OCR
+def send_image_to_gemini(image_base64):
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "inlineData": {
+                            "mimeType": "image/jpeg",
+                            "data": image_base64
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    try:
+        response = requests.post(GEMINI_URL, json=payload)
+        if response.status_code == 200:
+            structured_data = response.json()
+            extracted_text = structured_data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            return extracted_text
+        else:
+            return f"OCR API request failed: HTTP {response.status_code}, {response.text}"
+
+    except Exception as e:
+        return str(e)
 
 # Function to send extracted text to Gemini for AI-based field extraction
 def send_to_gemini(ocr_text):
