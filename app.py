@@ -55,7 +55,7 @@ def extract_text_from_pdf(pdf_url):
         full_text = "\n".join(extracted_text)
 
         # Log raw OCR output for debugging
-        print("🔍 Extracted OCR Text:\n", full_text[:2000])  # Limit to 2000 chars for preview
+        print("🔍 Extracted OCR Text:\n", full_text[:20000])  # Limit to 2000 chars for preview
 
         # Send extracted text to Gemini for AI-based field extraction
         structured_data = send_to_gemini(full_text)
