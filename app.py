@@ -3,6 +3,9 @@ import requests
 from google.cloud import vision
 from pdf2image import convert_from_bytes
 from io import BytesIO
+import os
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 app = Flask(__name__)
 
@@ -49,7 +52,7 @@ def extract_text_from_pdf(pdf_url):
         full_text = "\n".join(extracted_text)
 
         # Log raw OCR output for debugging
-        print("🔍 Extracted OCR Text:\n", full_text[:2000])  # Limit to 2000 chars for preview
+        print("🔍 Extracted OCR Text:\n", full_text[:20000])  # Limit to 2000 chars for preview
 
         return full_text
 
@@ -61,7 +64,7 @@ def send_to_google_gemini(extracted_text):
     try:
         api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
         headers = {"Content-Type": "application/json"}
-        params = {"key": "GeminiKey"}  # 🔹 Replace with a new API Key
+        params = {"key": GEMINI_API_KEY}  # 🔹 Replace with a new API Key
 
         payload = {
             "contents": [{
