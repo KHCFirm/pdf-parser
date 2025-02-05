@@ -3,26 +3,11 @@ import requests
 from google.cloud import vision
 from pdf2image import convert_from_bytes
 from io import BytesIO
-from transformers import pipeline
 
 app = Flask(__name__)
 
 # Initialize Google Cloud Vision OCR client
 client = vision.ImageAnnotatorClient()
-
-# Load Hugging Face Model for Field Classification
-classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
-
-# Predefined target fields
-TARGET_FIELDS = [
-    "Billed By", "Billing Provider NPI", "Charges", "Claim Receiver Type",
-    "Clinical Signature Date", "Date of Service", "Days Units", "Diagnosis",
-    "Diagnosis Pointer", "Federal TIN", "Group Number", "Insured's ID",
-    "Insured's Name", "Patient's Address", "Patient's DOB", "Patient's Name",
-    "Patient's SEX", "Payment Authorization Signature", "Place of Service",
-    "Procedure Code", "Procedure Code Modifier", "Relationship to Insured",
-    "Rendering Provider ID"
-]
 
 # Function to extract text from a PDF using Google Cloud OCR
 def extract_text_from_pdf(pdf_url):
@@ -42,7 +27,7 @@ def extract_text_from_pdf(pdf_url):
 
         pdf_bytes = BytesIO(response.content)
 
-        # Convert PDF to images (high-quality for OCR)
+        # Convert PDF to images
         images = convert_from_bytes(pdf_bytes.read(), dpi=300)
 
         extracted_text = []
@@ -66,47 +51,40 @@ def extract_text_from_pdf(pdf_url):
         # Log raw OCR output for debugging
         print("🔍 Extracted OCR Text:\n", full_text[:2000])  # Limit to 2000 chars for preview
 
-        # AI-based field classification
-        structured_data = ai_field_mapping(full_text)
-
-        return structured_data
+        return full_text
 
     except Exception as e:
         return {"error": str(e)}
 
-# AI-based function to classify text into HCFA 1500 fields
-def ai_field_mapping(ocr_text):
-    # Normalize OCR text
-    normalized_text = ocr_text.replace("\n", " ").strip()
+# Function to send data to Google Gemini AI for structured HCFA 1500 processing
+def send_to_google_gemini(extracted_text):
+    try:
+        api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+        headers = {"Content-Type": "application/json"}
+        params = {"key": "GeminiKey"}  # 🔹 Replace with a new API Key
 
-    # Split text into smaller parts for classification
-    text_chunks = normalized_text.split(" ")
-    classified_fields = {}
+        payload = {
+            "contents": [{
+                "parts": [{"text": f"Extracted OCR Text:\n\n{extracted_text}\n\n"
+                                   f"Please extract key-value pairs for a HCFA 1500 medical form, "
+                                   f"ensuring that all fields are correctly mapped to their corresponding values."}]
+            }]
+        }
 
-    # Iterate through each chunk and classify it
-    for chunk in text_chunks:
-        # Perform zero-shot classification
-        result = classifier(chunk, TARGET_FIELDS, multi_label=True)
-        predictions = result["labels"]
-        scores = result["scores"]
+        response = requests.post(api_url, headers=headers, params=params, json=payload)
+        if response.status_code != 200:
+            return {"error": f"AI API request failed: HTTP {response.status_code}, {response.text}"}
 
-        # Map the chunk to the highest-scoring target field
-        if scores and scores[0] > 0.5:  # Confidence threshold
-            field = predictions[0]
-            if field not in classified_fields:
-                classified_fields[field] = chunk
-            else:
-                classified_fields[field] += f" {chunk}"  # Combine chunks
+        result = response.json()
+        print("🔍 AI Response:", result)
+        return result
 
-    # Post-process the classified fields
-    for field in TARGET_FIELDS:
-        classified_fields.setdefault(field, "Not Found")
-
-    return classified_fields
+    except Exception as e:
+        return {"error": str(e)}
 
 @app.route("/", methods=["GET"])
 def home():
-    return jsonify({"message": "🚀 HCFA 1500 OCR API with AI. Use /parse?url=your_pdf_link to extract structured data."})
+    return jsonify({"message": "🚀 HCFA 1500 OCR API with Google Gemini AI Processing. Use /parse?url=your_pdf_link to extract structured data."})
 
 @app.route("/parse", methods=["GET"])
 def parse_pdf():
@@ -114,8 +92,14 @@ def parse_pdf():
     if not pdf_url:
         return jsonify({"error": "❗ Provide a PDF URL"}), 400
 
-    extracted_data = extract_text_from_pdf(pdf_url.strip())
-    return jsonify(extracted_data)
+    # Step 1: Extract text from PDF
+    extracted_text = extract_text_from_pdf(pdf_url.strip())
+    if "error" in extracted_text:
+        return jsonify(extracted_text), 500
+
+    # Step 2: Send extracted text to AI for structured data extraction
+    ai_response = send_to_google_gemini(extracted_text)
+    return jsonify({"extracted_fields": ai_response})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
