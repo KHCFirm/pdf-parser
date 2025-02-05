@@ -6,3 +6,4 @@ numpy
 pillow
 pdf2image
 gunicorn
+transformers
