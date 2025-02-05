@@ -48,6 +48,9 @@ steps:
 substitutions:
   _SHORT_SHA: "latest"
 
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 images:
   - "gcr.io/practical-theme-425612-n0/pdf-parser:latest"
   - "gcr.io/practical-theme-425612-n0/pdf-parser$_SHORT_SHA"
