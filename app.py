@@ -50,7 +50,7 @@ def extract_text_from_pdf(pdf_url):
         full_text = "\n".join(extracted_text)
 
         # Log raw OCR output for debugging
-        print("🔍 Extracted OCR Text:\n", full_text[:2000])  # Limit to 2000 chars for preview
+        print("🔍 Extracted OCR Text:\n", full_text[:20000])  # Limit to 2000 chars for preview
 
         # Parse text into structured HCFA 1500 fields
         structured_data = parse_hcfa_1500(full_text)
@@ -68,29 +68,29 @@ def parse_hcfa_1500(ocr_text):
     normalized_text = ocr_text.replace("\n", " ").strip()
 
     fields = {
-        "Claim Receiver Type": r"(?<=Claim Receiver Type)[\s:]+([\w\s]+)",
-        "Insured's ID #": r"(?<=INSURED['’]?S ID\.? NUMBER)[:\s]+([\w\d]+)",
-        "Patient's Name": r"(?<=PATIENT['’]?S NAME)[:\s]+([\w\s,]+)",
-        "Patient's DOB": r"(?<=PATIENT['’]?S BIRTH DATE)[:\s]+(\d{2} \d{2} \d{4})",
-        "Patient's SEX": r"(?<=PATIENT['’]?S SEX)[:\s]+([MF])",
-        "Insured's Name": r"(?<=INSURED['’]?S NAME)[:\s]+([\w\s,]+)",
-        "Patient's Address": r"(?<=PATIENT['’]?S ADDRESS)[:\s]+([\w\s,]+)",
-        "Relationship to Insured": r"(?<=RELATIONSHIP TO INSURED)[:\s]+([\w]+)",
-        "Group Number": r"(?<=GROUP NUMBER)[:\s]+([\d]+)",
-        "Payment Authorization Signature": r"(?<=PATIENT['’]?S OR AUTHORIZED PERSON['’]?S SIGNATURE)[\s:]+([\w\s]+)",
-        "Diagnosis": r"(?<=DIAGNOSIS)[:\s]+([\w\d\.]+)",
-        "Date of Service": r"(?<=DATE OF SERVICE)[:\s]+([\d/]+)",
-        "Place of Service": r"(?<=PLACE OF SERVICE)[:\s]+([\d]+)",
-        "Procedure Code": r"(?<=PROCEDURE CODE)[:\s]+([\w\d]+)",
-        "Procedure Code Modifier": r"(?<=MODIFIER)[:\s]+([\w]+)",
-        "Diagnosis Pointer": r"(?<=DIAGNOSIS POINTER)[:\s]+([\d]+)",
-        "Charges": r"(?<=CHARGES)[:\s]+\$?([\d.]+)",
-        "Rendering Provider ID": r"(?<=RENDERING PROVIDER ID)[:\s]+([\d]+)",
-        "Days/Units": r"(?<=DAYS/UNITS)[:\s]+([\d]+)",
-        "Federal TIN": r"(?<=FEDERAL TIN)[:\s]+([\d]+)",
-        "Clinical Signature Date": r"(?<=CLINICIAN['’]?S SIGNATURE DATE)[:\s]+([\w\s,]+)",
-        "Billed By": r"(?<=BILLED BY)[:\s]+([\w\s,]+)",
-        "Billing Provider NPI": r"(?<=BILLING PROVIDER NPI)[:\s]+([\d]+)"
+        "Claim Receiver Type": r"Claim Receiver Type[:\s]+([\w\s]+)",
+        "Insured's ID #": r"INSURED['’]?S ID\.? NUMBER[:\s]+([\w\d]+)",
+        "Patient's Name": r"PATIENT['’]?S NAME[:\s]+([\w\s,]+)",
+        "Patient's DOB": r"PATIENT['’]?S BIRTH DATE[:\s]+(\d{2} \d{2} \d{4})",
+        "Patient's SEX": r"PATIENT['’]?S SEX[:\s]+([MF])",
+        "Insured's Name": r"INSURED['’]?S NAME[:\s]+([\w\s,]+)",
+        "Patient's Address": r"PATIENT['’]?S ADDRESS[:\s]+([\w\s,]+)",
+        "Relationship to Insured": r"RELATIONSHIP TO INSURED[:\s]+([\w]+)",
+        "Group Number": r"GROUP NUMBER[:\s]+([\d]+)",
+        "Payment Authorization Signature": r"PATIENT['’]?S OR AUTHORIZED PERSON['’]?S SIGNATURE[:\s]+([\w\s]+)",
+        "Diagnosis": r"DIAGNOSIS[:\s]+([\w\d\.]+)",
+        "Date of Service": r"DATE OF SERVICE[:\s]+([\d/]+)",
+        "Place of Service": r"PLACE OF SERVICE[:\s]+([\d]+)",
+        "Procedure Code": r"PROCEDURE CODE[:\s]+([\w\d]+)",
+        "Procedure Code Modifier": r"MODIFIER[:\s]+([\w]+)",
+        "Diagnosis Pointer": r"DIAGNOSIS POINTER[:\s]+([\d]+)",
+        "Charges": r"CHARGES[:\s]+\$?([\d.]+)",
+        "Rendering Provider ID": r"RENDERING PROVIDER ID[:\s]+([\d]+)",
+        "Days/Units": r"DAYS/UNITS[:\s]+([\d]+)",
+        "Federal TIN": r"FEDERAL TIN[:\s]+([\d]+)",
+        "Clinical Signature Date": r"CLINICIAN['’]?S SIGNATURE DATE[:\s]+([\w\s,]+)",
+        "Billed By": r"BILLED BY[:\s]+([\w\s,]+)",
+        "Billing Provider NPI": r"BILLING PROVIDER NPI[:\s]+([\d]+)"
     }
 
     structured_output = {}
