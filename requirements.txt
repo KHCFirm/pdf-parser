@@ -1,6 +1,7 @@
 flask
 requests
 google-cloud-vision
-pdf2image
+opencv-python
+numpy
 pillow
-gunicorn
+pdf2image
