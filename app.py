@@ -2,16 +2,27 @@ from flask import Flask, request, jsonify
 import requests
 import re
 import os
+import cv2
+import numpy as np
 from google.cloud import vision
 from pdf2image import convert_from_bytes
 from io import BytesIO
+from PIL import Image
 
 app = Flask(__name__)
 
 # Initialize Google Cloud Vision OCR client
 client = vision.ImageAnnotatorClient()
 
-# Function to extract text from a PDF using Google Cloud OCR
+# Preprocess images before OCR
+def preprocess_image(image):
+    """Enhance image contrast and binarize for better OCR accuracy."""
+    img = np.array(image)
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return Image.fromarray(thresh)
+
+# Extract text from a PDF using Google Cloud OCR
 def extract_text_from_pdf(pdf_url):
     try:
         if not pdf_url.startswith("http"):
@@ -34,11 +45,13 @@ def extract_text_from_pdf(pdf_url):
 
         extracted_text = []
         for img in images:
+            # Preprocess image before OCR
+            img = preprocess_image(img)
             image_content = BytesIO()
             img.save(image_content, format="JPEG")
             image_content = image_content.getvalue()
 
-            # 🔥 Use document_text_detection for better structured text parsing
+            # Use document_text_detection for structured text extraction
             image = vision.Image(content=image_content)
             response = client.document_text_detection(image=image)
 
@@ -50,8 +63,8 @@ def extract_text_from_pdf(pdf_url):
 
         full_text = "\n".join(extracted_text)
 
-        # ✅ Log raw OCR text
-        print("\n🔍 Extracted OCR Text:\n", full_text[:2000])  # Show first 2000 characters
+        # Log extracted text for debugging
+        print("\n🔍 Extracted OCR Text:\n", full_text[:2000])
 
         # Process text into structured HCFA 1500 format
         structured_data = parse_hcfa_1500(full_text)
@@ -61,7 +74,7 @@ def extract_text_from_pdf(pdf_url):
     except Exception as e:
         return {"error": str(e)}
 
-# Function to parse text into HCFA 1500 structured data
+# Function to parse text into structured data
 def parse_hcfa_1500(ocr_text):
     fields = {
         "Claim Receiver Type": r"Claim Receiver Type[:\s]+([\w\s]+)",
@@ -96,10 +109,6 @@ def parse_hcfa_1500(ocr_text):
 
     return structured_output
 
-@app.route("/", methods=["GET"])
-def home():
-    return jsonify({"message": "🚀 HCFA 1500 OCR API. Use /parse?url=your_pdf_link to extract structured data."})
-
 @app.route("/parse", methods=["GET"])
 def parse_pdf():
     pdf_url = request.args.get("url")
@@ -107,12 +116,7 @@ def parse_pdf():
         return jsonify({"error": "❗ Provide a PDF URL"}), 400
 
     extracted_data = extract_text_from_pdf(pdf_url.strip())
-
-    # ✅ Ensure Zapier receives a clean JSON
-    return jsonify({
-        "status": "success",
-        "extracted_fields": extracted_data
-    })
+    return jsonify(extracted_data)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
