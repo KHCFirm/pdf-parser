@@ -60,7 +60,8 @@ def extract_text_from_pdf(pdf_url):
         # Send extracted text to Gemini for AI-based field extraction
         structured_data = send_to_gemini(full_text)
 
-        return structured_data
+        # ✅ Standardize Field Names Before Returning Data
+        return standardize_field_names(structured_data)
 
     except Exception as e:
         return {"error": str(e)}
@@ -70,24 +71,30 @@ def send_to_gemini(ocr_text):
     prompt_text = f"""
     You are an AI assistant that extracts structured fields from an HCFA 1500 medical claim form.
     Given the following OCR-extracted text from an HCFA 1500 form, return structured JSON with key-value pairs.
-    Fields:
-    - Patient's Name
-    - Patient's DOB
-    - Patient's SEX
-    - Insured's Name
-    - Insured's ID
-    - Diagnosis Codes
-    - Procedure Codes
-    - Place of Service
-    - Total Charges
-    - Rendering Provider ID
-    - Federal Tax ID
-    - Billing Provider NPI
+    **Use these exact field names:**
+    - insured_id
+    - insured_name
+    - patient_name
+    - patient_birth_date
+    - patient_sex
+    - patient_relationship_to_insured
+    - patient_address
+    - patient_city
+    - patient_state
+    - patient_zip
+    - patient_phone
+    - diagnosis_codes
+    - procedure_codes
+    - place_of_service
+    - total_charges
+    - rendering_provider_id
+    - federal_tax_id
+    - billing_provider_npi
 
     OCR TEXT:
     {ocr_text}
 
-    Return a valid JSON object with the extracted fields.
+    Return only a valid JSON object with the extracted fields.
     """
 
     payload = {
@@ -109,6 +116,35 @@ def send_to_gemini(ocr_text):
 
     except Exception as e:
         return {"error": str(e)}
+
+# Function to map extracted AI fields to standardized HCFA 1500 field names
+def standardize_field_names(data):
+    mapping = {
+        "INSURED_ID_NUMBER": "insured_id",
+        "INSURED_LAST_NAME": "insured_name",
+        "PATIENT_LAST_NAME": "patient_name",
+        "PATIENT_BIRTH_DATE": "patient_birth_date",
+        "PATIENT_SEX": "patient_sex",
+        "PATIENT_RELATIONSHIP_TO_INSURED": "patient_relationship_to_insured",
+        "PATIENT_ADDRESS": "patient_address",
+        "PATIENT_CITY": "patient_city",
+        "PATIENT_STATE": "patient_state",
+        "PATIENT_ZIP_CODE": "patient_zip",
+        "PATIENT_PHONE_NUMBER": "patient_phone",
+        "DIAGNOSIS_CODES": "diagnosis_codes",
+        "SERVICE_LINES": "procedure_codes",
+        "PLACE_OF_SERVICE": "place_of_service",
+        "TOTAL_CHARGE": "total_charges",
+        "RENDERING_PROVIDER_ID": "rendering_provider_id",
+        "FEDERAL_TIN": "federal_tax_id",
+        "BILLING_PROVIDER_NPI": "billing_provider_npi",
+    }
+
+    standardized_data = {}
+    for key, value in data.get("structured_data", {}).items():
+        standardized_data[mapping.get(key, key)] = value  # Rename keys if found in mapping
+
+    return standardized_data
 
 @app.route("/", methods=["GET"])
 def home():
