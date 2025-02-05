@@ -54,7 +54,7 @@ def extract_text_from_pdf(pdf_url):
 
         # Normalize and parse text into structured HCFA 1500 fields
         normalized_text = normalize_text(full_text)
-        print("🔍 Normalized OCR Text:\n", normalized_text[:2000])  # For debugging
+        print("🔍 Normalized OCR Text:\n", normalized_text[:20000])  # For debugging
         structured_data = parse_hcfa_1500(normalized_text)
 
         return structured_data
