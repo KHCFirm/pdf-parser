@@ -1,31 +1,38 @@
 steps:
-# 1️⃣ Build the Docker image with a unique tag
+# 1️⃣ Build the Docker image with a valid tag
 - name: "gcr.io/cloud-builders/docker"
   args:
     - "build"
     - "-t"
-    - "gcr.io/practical-theme-425612-n0/pdf-parser:$COMMIT_SHA"
+    - "gcr.io/practical-theme-425612-n0/pdf-parser:latest"
+    - "-t"
+    - "gcr.io/practical-theme-425612-n0/pdf-parser:$SHORT_SHA"
     - "."
 
-# 2️⃣ Push the image to Google Container Registry
+# 2️⃣ Push both `latest` and commit-tagged image
 - name: "gcr.io/cloud-builders/docker"
   args:
     - "push"
-    - "gcr.io/practical-theme-425612-n0/pdf-parser:$COMMIT_SHA"
+    - "gcr.io/practical-theme-425612-n0/pdf-parser:latest"
 
-# 3️⃣ Deploy the container to Google Cloud Run
+- name: "gcr.io/cloud-builders/docker"
+  args:
+    - "push"
+    - "gcr.io/practical-theme-425612-n0/pdf-parser:$SHORT_SHA"
+
+# 3️⃣ Deploy to Cloud Run using latest image
 - name: "gcr.io/cloud-builders/gcloud"
   args:
     - "run"
     - "deploy"
     - "ocr-api"
-    - "--image=gcr.io/practical-theme-425612-n0/pdf-parser:$COMMIT_SHA"
+    - "--image=gcr.io/practical-theme-425612-n0/pdf-parser:latest"
     - "--region=us-central1"
     - "--platform=managed"
     - "--allow-unauthenticated"
     - "--port=8080"
 
-# 4️⃣ Set IAM policies to allow unauthenticated access (optional)
+# 4️⃣ (Optional) Grant public access if needed
 - name: "gcr.io/cloud-builders/gcloud"
   args:
     - "run"
@@ -37,10 +44,10 @@ steps:
     - "--role=roles/run.invoker"
 
 substitutions:
-  _DEFAULT_LOGS_BUCKET_BEHAVIOR: "CLOUD_LOGGING_ONLY"
-  COMMIT_SHA: "${SHORT_SHA}"
+  SHORT_SHA: "${SHORT_SHA}"
 
 images:
-  - "gcr.io/practical-theme-425612-n0/pdf-parser:$COMMIT_SHA"
+  - "gcr.io/practical-theme-425612-n0/pdf-parser:latest"
+  - "gcr.io/practical-theme-425612-n0/pdf-parser:$SHORT_SHA"
 
-timeout: "1200s" # 20 minutes timeout to prevent build failures on slow connections
+timeout: "1200s" # Allow 20 minutes for the build to prevent timeouts
