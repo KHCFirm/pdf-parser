@@ -1,9 +1,8 @@
 flask
 requests
 google-cloud-vision
-opencv-python
-numpy
 pillow
 pdf2image
 gunicorn
 transformers
+torch
