@@ -1,13 +1,12 @@
-# Use Python with Google Cloud SDK pre-installed
-FROM python:3.9
+# Use official Python image
+FROM python:3.9-slim
 
-# Install system dependencies
+# Install required dependencies
 RUN apt-get update && apt-get install -y \
+    libpoppler-cpp-dev \
+    tesseract-ocr \
     poppler-utils \
-    libsm6 \
-    libxrender1 \
-    libxext6 && \
-    rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -18,8 +17,11 @@ COPY . .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose port
+# Set environment variables
+ENV PORT=8080
+
+# Expose port for Google Cloud Run
 EXPOSE 8080
 
-# Start the Flask app with Gunicorn, listening on port 8080
+# Start the application
 CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "app:app"]
