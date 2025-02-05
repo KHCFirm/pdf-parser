@@ -1,29 +1,20 @@
 steps:
-  # Step 1: Build Docker Image
-  - name: "gcr.io/cloud-builders/docker"
-    args:
-      - "build"
-      - "-t"
-      - "gcr.io/$PROJECT_ID/pdf-parser:$COMMIT_SHA"
-      - "."
+- name: gcr.io/cloud-builders/docker
+  args: ['build', '-t', 'gcr.io/$PROJECT_ID/pdf-parser:latest', '.']
 
-  # Step 2: Push Image to Google Container Registry (GCR)
-  - name: "gcr.io/cloud-builders/docker"
-    args:
-      - "push"
-      - "gcr.io/$PROJECT_ID/pdf-parser:$COMMIT_SHA"
+- name: gcr.io/cloud-builders/docker
+  args: ['push', 'gcr.io/$PROJECT_ID/pdf-parser:latest']
 
-  # Step 3: Deploy to Cloud Run
-  - name: "gcr.io/cloud-builders/gcloud"
-    args:
-      - "run"
-      - "deploy"
-      - "ocr-api"
-      - "--image=gcr.io/$PROJECT_ID/pdf-parser:$COMMIT_SHA"
-      - "--region=us-central1"
-      - "--platform=managed"
-      - "--allow-unauthenticated"
-      - "--port=8080"
+- name: 'gcr.io/cloud-builders/gcloud'
+  args:
+  - 'run'
+  - 'deploy'
+  - 'ocr-api'
+  - '--image=gcr.io/$PROJECT_ID/pdf-parser:latest'
+  - '--platform=managed'
+  - '--region=us-central1'
+  - '--allow-unauthenticated'
+  - '--port=8080'
 
 # Store logs only in Cloud Logging
 options:
