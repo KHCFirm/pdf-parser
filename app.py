@@ -9,7 +9,7 @@ app = Flask(__name__)
 
 # Get Gemini API Key from environment variable
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key={GEMINI_API_KEY}"
 
 # Function to extract text from a PDF using Gemini's vision model
 def extract_text_from_pdf(pdf_url):
