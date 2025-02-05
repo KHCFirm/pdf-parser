@@ -1,16 +1,19 @@
 from flask import Flask, request, jsonify
 import requests
+import re
+import os
 from google.cloud import vision
 from pdf2image import convert_from_bytes
 from io import BytesIO
-import os
-
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 app = Flask(__name__)
 
 # Initialize Google Cloud Vision OCR client
 client = vision.ImageAnnotatorClient()
+
+# Get Gemini API Key from environment variable
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
 
 # Function to extract text from a PDF using Google Cloud OCR
 def extract_text_from_pdf(pdf_url):
@@ -30,7 +33,7 @@ def extract_text_from_pdf(pdf_url):
 
         pdf_bytes = BytesIO(response.content)
 
-        # Convert PDF to images
+        # Convert PDF to images (high-quality for OCR)
         images = convert_from_bytes(pdf_bytes.read(), dpi=300)
 
         extracted_text = []
@@ -52,42 +55,64 @@ def extract_text_from_pdf(pdf_url):
         full_text = "\n".join(extracted_text)
 
         # Log raw OCR output for debugging
-        print("🔍 Extracted OCR Text:\n", full_text[:20000])  # Limit to 2000 chars for preview
+        print("🔍 Extracted OCR Text:\n", full_text[:2000])  # Limit to 2000 chars for preview
 
-        return full_text
+        # Send extracted text to Gemini for AI-based field extraction
+        structured_data = send_to_gemini(full_text)
+
+        return structured_data
 
     except Exception as e:
         return {"error": str(e)}
 
-# Function to send data to Google Gemini AI for structured HCFA 1500 processing
-def send_to_google_gemini(extracted_text):
+# Function to send extracted text to Gemini for AI-based field extraction
+def send_to_gemini(ocr_text):
+    prompt_text = f"""
+    You are an AI assistant that extracts structured fields from an HCFA 1500 medical claim form.
+    Given the following OCR-extracted text from an HCFA 1500 form, return structured JSON with key-value pairs.
+    Fields:
+    - Patient's Name
+    - Patient's DOB
+    - Patient's SEX
+    - Insured's Name
+    - Insured's ID
+    - Diagnosis Codes
+    - Procedure Codes
+    - Place of Service
+    - Total Charges
+    - Rendering Provider ID
+    - Federal Tax ID
+    - Billing Provider NPI
+
+    OCR TEXT:
+    {ocr_text}
+
+    Return a valid JSON object with the extracted fields.
+    """
+
+    payload = {
+        "contents": [
+            {
+                "parts": [{"text": prompt_text}]
+            }
+        ]
+    }
+
     try:
-        api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
-        headers = {"Content-Type": "application/json"}
-        params = {"key": GEMINI_API_KEY}  # 🔹 Replace with a new API Key
-
-        payload = {
-            "contents": [{
-                "parts": [{"text": f"Extracted OCR Text:\n\n{extracted_text}\n\n"
-                                   f"Please extract key-value pairs for a HCFA 1500 medical form, "
-                                   f"ensuring that all fields are correctly mapped to their corresponding values."}]
-            }]
-        }
-
-        response = requests.post(api_url, headers=headers, params=params, json=payload)
-        if response.status_code != 200:
+        response = requests.post(GEMINI_URL, json=payload)
+        if response.status_code == 200:
+            structured_data = response.json()
+            extracted_text = structured_data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            return {"structured_data": extracted_text}
+        else:
             return {"error": f"AI API request failed: HTTP {response.status_code}, {response.text}"}
-
-        result = response.json()
-        print("🔍 AI Response:", result)
-        return result
 
     except Exception as e:
         return {"error": str(e)}
 
 @app.route("/", methods=["GET"])
 def home():
-    return jsonify({"message": "🚀 HCFA 1500 OCR API with Google Gemini AI Processing. Use /parse?url=your_pdf_link to extract structured data."})
+    return jsonify({"message": "🚀 HCFA 1500 OCR API. Use /parse?url=your_pdf_link to extract structured data."})
 
 @app.route("/parse", methods=["GET"])
 def parse_pdf():
@@ -95,14 +120,8 @@ def parse_pdf():
     if not pdf_url:
         return jsonify({"error": "❗ Provide a PDF URL"}), 400
 
-    # Step 1: Extract text from PDF
-    extracted_text = extract_text_from_pdf(pdf_url.strip())
-    if "error" in extracted_text:
-        return jsonify(extracted_text), 500
-
-    # Step 2: Send extracted text to AI for structured data extraction
-    ai_response = send_to_google_gemini(extracted_text)
-    return jsonify({"extracted_fields": ai_response})
+    extracted_data = extract_text_from_pdf(pdf_url.strip())
+    return jsonify(extracted_data)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
