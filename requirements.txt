@@ -1,3 +1,4 @@
 boto3
 requests
 openai
+pydantic==2.0.0
