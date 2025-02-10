@@ -1,57 +1,72 @@
 import json
+import boto3
+import uuid
+import requests
+
+# Initialize AWS clients
+s3_client = boto3.client("s3")
+textract = boto3.client("textract")
+
+# Set the S3 bucket name
+BUCKET_NAME = "khcfirm"
 
 def lambda_handler(event, context):
     """
-    AWS Lambda function to handle API Gateway requests.
-
-    :param event: The event data passed by API Gateway
-    :param context: The runtime information provided by Lambda
-    :return: A structured response for API Gateway
+    Lambda function to process a PDF from a URL:
+    - Downloads the PDF
+    - Uploads it to S3
+    - Generates a presigned URL
+    - Starts Textract document analysis
     """
+
     try:
-        # Debugging: Print the event received
-        print("Received event:", json.dumps(event))
+        # Parse event body
+        body = json.loads(event.get("body", "{}"))
+        pdf_url = body.get("pdf_url")
 
-        # Ensure the request contains a body
-        if "body" not in event:
+        if not pdf_url:
             return {
                 "statusCode": 400,
-                "body": json.dumps({"error": "Missing 'body' in request."})
+                "body": json.dumps({"error": "No PDF URL provided"})
             }
 
-        # Parse the request body (handle both direct input and Base64-encoded)
-        body = event["body"]
-        if event.get("isBase64Encoded", False):
-            import base64
-            body = base64.b64decode(body).decode("utf-8")
+        # Generate a unique filename
+        unique_filename = f"uploads/temp_{uuid.uuid4().hex}.pdf"
 
-        # Convert the body to JSON
-        try:
-            request_data = json.loads(body)
-        except json.JSONDecodeError:
+        # Download the PDF
+        response = requests.get(pdf_url)
+        if response.status_code != 200:
             return {
-                "statusCode": 400,
-                "body": json.dumps({"error": "Invalid JSON in request body."})
+                "statusCode": 500,
+                "body": json.dumps({"error": "Failed to download file from URL"})
             }
 
-        # Example: Extracting expected parameters
-        name = request_data.get("name", "Guest")
+        # Upload file to S3
+        s3_client.put_object(Bucket=BUCKET_NAME, Key=unique_filename, Body=response.content)
 
-        # Construct a response
-        response_body = {
-            "message": f"Hello, {name}! Your API Gateway Lambda function is working!"
-        }
+        # Generate a presigned URL for accessing the uploaded file
+        presigned_url = s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": BUCKET_NAME, "Key": unique_filename},
+            ExpiresIn=3600  # URL expires in 1 hour
+        )
+
+        # Start Textract document analysis
+        textract_response = textract.start_document_analysis(
+            DocumentLocation={"S3Object": {"Bucket": BUCKET_NAME, "Name": unique_filename}},
+            FeatureTypes=["FORMS", "TABLES"]
+        )
 
         return {
             "statusCode": 200,
-            "body": json.dumps(response_body),
-            "headers": {
-                "Content-Type": "application/json"
-            }
+            "body": json.dumps({
+                "message": "File uploaded and Textract processing started",
+                "presigned_url": presigned_url,
+                "job_id": textract_response["JobId"]
+            })
         }
 
     except Exception as e:
-        print("Error:", str(e))
         return {
             "statusCode": 500,
             "body": json.dumps({"error": str(e)})
