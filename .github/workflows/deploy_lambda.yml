@@ -1,0 +1,33 @@
+name: Deploy Lambda Function
+
+on:
+  push:
+    branches:
+      - main  # Runs when you push to the main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🔧 Set Up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 📦 Install Dependencies
+        run: |
+          pip install -r requirements.txt -t .
+
+      - name: 🎯 Zip Lambda Function
+        run: zip -r lambda_function.zip .
+
+      - name: 🚀 Deploy to AWS Lambda
+        run: |
+          aws lambda update-function-code --function-name myLambdaFunction --zip-file fileb://lambda_function.zip --region us-east-2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
