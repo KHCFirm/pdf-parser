@@ -1,53 +1,58 @@
 import json
-import boto3
-import uuid
-import requests
-
-s3_client = boto3.client("s3")
-textract = boto3.client("textract")
-
-BUCKET_NAME = "khcfirm"
 
 def lambda_handler(event, context):
+    """
+    AWS Lambda function to handle API Gateway requests.
+
+    :param event: The event data passed by API Gateway
+    :param context: The runtime information provided by Lambda
+    :return: A structured response for API Gateway
+    """
     try:
-        # Get PDF URL from request
-        body = json.loads(event["body"])
-        pdf_url = body.get("pdf_url")
-        if not pdf_url:
-            return {"statusCode": 400, "body": json.dumps({"error": "No PDF URL provided"})}
+        # Debugging: Print the event received
+        print("Received event:", json.dumps(event))
 
-        # Generate a unique filename
-        unique_filename = f"uploads/temp_{uuid.uuid4().hex}.pdf"
+        # Ensure the request contains a body
+        if "body" not in event:
+            return {
+                "statusCode": 400,
+                "body": json.dumps({"error": "Missing 'body' in request."})
+            }
 
-        # Download the PDF
-        response = requests.get(pdf_url)
-        if response.status_code != 200:
-            return {"statusCode": 500, "body": json.dumps({"error": "Failed to download file"})}
+        # Parse the request body (handle both direct input and Base64-encoded)
+        body = event["body"]
+        if event.get("isBase64Encoded", False):
+            import base64
+            body = base64.b64decode(body).decode("utf-8")
 
-        # Upload to S3
-        s3_client.put_object(Bucket=BUCKET_NAME, Key=unique_filename, Body=response.content)
+        # Convert the body to JSON
+        try:
+            request_data = json.loads(body)
+        except json.JSONDecodeError:
+            return {
+                "statusCode": 400,
+                "body": json.dumps({"error": "Invalid JSON in request body."})
+            }
 
-        # Generate a pre-signed URL
-        presigned_url = s3_client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": BUCKET_NAME, "Key": unique_filename},
-            ExpiresIn=3600
-        )
+        # Example: Extracting expected parameters
+        name = request_data.get("name", "Guest")
 
-        # Start Textract job
-        textract_response = textract.start_document_analysis(
-            DocumentLocation={"S3Object": {"Bucket": BUCKET_NAME, "Name": unique_filename}},
-            FeatureTypes=["FORMS", "TABLES"]
-        )
+        # Construct a response
+        response_body = {
+            "message": f"Hello, {name}! Your API Gateway Lambda function is working!"
+        }
 
         return {
             "statusCode": 200,
-            "body": json.dumps({
-                "message": "File uploaded and processing started",
-                "presigned_url": presigned_url,
-                "job_id": textract_response["JobId"]
-            })
+            "body": json.dumps(response_body),
+            "headers": {
+                "Content-Type": "application/json"
+            }
         }
 
     except Exception as e:
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+        print("Error:", str(e))
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": str(e)})
+        }
