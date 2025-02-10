@@ -2,112 +2,113 @@ import json
 import boto3
 import uuid
 import requests
+import time
 
 s3_client = boto3.client("s3")
 textract = boto3.client("textract")
-
 BUCKET_NAME = "khcfirm"
+
+def extract_text(job_id):
+    """Polls Textract for completed text extraction and returns structured data."""
+    while True:
+        response = textract.get_document_analysis(JobId=job_id)
+        status = response["JobStatus"]
+        
+        if status in ["SUCCEEDED", "FAILED"]:
+            break
+        time.sleep(5)
+    
+    if status == "FAILED":
+        return {"error": "Textract failed."}
+    
+    return map_to_fields(response["Blocks"])
+
+def map_to_fields(blocks):
+    """Parses Textract blocks and maps data to structured fields."""
+    extracted_data = {
+        "Insurance": {},
+        "Patient Information": {},
+        "Insured Information": {},
+        "Other Insurance": {},
+        "Authorization": {},
+        "Medical Information": {},
+        "Services Provided": [],
+        "Billing Information": {},
+        "Provider Information": {}
+    }
+    
+    lines = []
+    for block in blocks:
+        if block["BlockType"] == "LINE":
+            lines.append(block["Text"])
+    
+    text = "\n".join(lines)
+    
+    # Mapping extracted text to fields
+    extracted_data["Insurance"] = {
+        "Type": extract_value(text, "CARD OUT OF STATE"),
+        "Address": extract_value(text, "PO BOX"),
+        "Claim Form Approval": extract_value(text, "APPROVED BY"),
+        "Plan Name": extract_value(text, "HEALTH PLAN"),
+        "Insured ID": extract_value(text, "BTL")
+    }
+    
+    extracted_data["Patient Information"] = {
+        "Name": extract_value(text, "PATIENT'S NAME"),
+        "Date of Birth": extract_value(text, "PATIENT'S BIRTH DATE"),
+        "Sex": extract_value(text, "SEX"),
+        "Address": extract_value(text, "PATIENT'S ADDRESS"),
+        "Relationship to Insured": extract_value(text, "PATIENT RELATIONSHIP TO INSURED")
+    }
+    
+    extracted_data["Billing Information"] = {
+        "Federal Tax ID": extract_value(text, "FEDERAL TAX I.D. NUMBER"),
+        "Total Charge": extract_value(text, "TOTAL CHARGE"),
+        "Accept Assignment": extract_value(text, "ACCEPT ASSIGNMENT?"),
+    }
+    
+    return extracted_data
+
+def extract_value(text, key):
+    """Extracts values from text given a key."""
+    for line in text.split("\n"):
+        if key in line:
+            return line.split(key)[-1].strip()
+    return ""
 
 def lambda_handler(event, context):
     try:
-        # 🔹 Debugging: Print event to CloudWatch logs
-        print("Received Event:", json.dumps(event, indent=2))
-
-        # 🔹 Check which endpoint is being called
-        path = event.get("resource", "")
-
-        # 🔹 Process PDF Upload
-        if path == "/process-pdf":
-            return process_pdf(event)
-
-        # 🔹 Get Textract Results
-        elif path == "/get-text":
-            return get_text(event)
-
-        # 🔹 Handle unknown routes
-        else:
-            return {"statusCode": 400, "body": json.dumps({"error": "Invalid API path."})}
-
-    except Exception as e:
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
-
-
-def process_pdf(event):
-    """Handles uploading a PDF from URL, saving to S3, and starting Textract"""
-    try:
         body = json.loads(event["body"])
         pdf_url = body.get("pdf_url")
-
         if not pdf_url:
             return {"statusCode": 400, "body": json.dumps({"error": "No PDF URL provided"})}
-
-        # Generate a unique filename
+        
         unique_filename = f"uploads/temp_{uuid.uuid4().hex}.pdf"
-
-        # Download the PDF from the given URL
         response = requests.get(pdf_url)
         if response.status_code != 200:
             return {"statusCode": 500, "body": json.dumps({"error": "Failed to download file"})}
-
-        # Upload file to S3
+        
         s3_client.put_object(Bucket=BUCKET_NAME, Key=unique_filename, Body=response.content)
-
-        # Generate a pre-signed URL for access
         presigned_url = s3_client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": BUCKET_NAME, "Key": unique_filename},
-            ExpiresIn=3600
+            "get_object", Params={"Bucket": BUCKET_NAME, "Key": unique_filename}, ExpiresIn=3600
         )
-
-        # Start Textract analysis
+        
         textract_response = textract.start_document_analysis(
             DocumentLocation={"S3Object": {"Bucket": BUCKET_NAME, "Name": unique_filename}},
             FeatureTypes=["FORMS", "TABLES"]
         )
-
+        
+        job_id = textract_response["JobId"]
+        extracted_data = extract_text(job_id)
+        
         return {
             "statusCode": 200,
             "body": json.dumps({
-                "message": "File uploaded and Textract processing started",
+                "message": "File uploaded and Textract processing completed",
+                "structured_data": extracted_data,
                 "presigned_url": presigned_url,
-                "job_id": textract_response["JobId"]
+                "job_id": job_id
             })
         }
-
-    except Exception as e:
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
-
-
-def get_text(event):
-    """Retrieves extracted text from Textract using Job ID"""
-    try:
-        body = json.loads(event["body"])
-        job_id = body.get("job_id")
-
-        if not job_id:
-            return {"statusCode": 400, "body": json.dumps({"error": "No Job ID provided"})}
-
-        # Poll for job status
-        while True:
-            result = textract.get_document_analysis(JobId=job_id)
-            status = result["JobStatus"]
-
-            if status in ["SUCCEEDED", "FAILED"]:
-                break
-
-        if status == "FAILED":
-            return {"statusCode": 500, "body": json.dumps({"error": "Textract processing failed."})}
-
-        # Extract text from Textract response
-        extracted_text = []
-        for block in result["Blocks"]:
-            if block["BlockType"] == "LINE":
-                extracted_text.append(block["Text"])
-
-        # Join text into a single response
-        full_text = "\n".join(extracted_text)
-
-        return {"statusCode": 200, "body": json.dumps({"extracted_text": full_text})}
-
     except Exception as e:
         return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
