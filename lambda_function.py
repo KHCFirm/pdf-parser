@@ -6,7 +6,7 @@ import requests
 s3_client = boto3.client("s3")
 textract = boto3.client("textract")
 
-BUCKET_NAME = "your-bucket-name"
+BUCKET_NAME = "khcfirm"
 
 def lambda_handler(event, context):
     try:
